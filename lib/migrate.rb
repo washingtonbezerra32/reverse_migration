@@ -33,6 +33,7 @@ class Migrate
               c_migrate << "limit: #{coluna.limit}" if coluna.limit.present? && !%w(decimal integer boolean timestamp).include?(coluna.type.to_s)
               c_migrate << "precision: #{coluna.precision}" if coluna.precision.present?
               c_migrate << "scale: #{coluna.scale}" if coluna.scale.present?
+              c_migrate << "default: #{coluna.default}" if coluna.default.present?
               #c_migrate << "comment: '#{coluna.comment}'" if coluna.comment.present?
               migrate << "\t\t\t#{c_migrate * ', '}"
             end
