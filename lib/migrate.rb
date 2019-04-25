@@ -33,8 +33,10 @@ class Migrate
               c_migrate << "limit: #{coluna.limit}" if coluna.limit.present? && !%w(decimal integer).include?(coluna.type.to_s)
               c_migrate << "precision: #{coluna.precision}" if coluna.precision.present?
               c_migrate << "scale: #{coluna.scale}" if coluna.scale.present?
+              c_migrate << verifica_relacionamento(nm_classe, coluna.name)
+
               #c_migrate << "comment: '#{coluna.comment}'" if coluna.comment.present?
-              migrate << "\t\t\t#{c_migrate * ', '}"
+              migrate << "\t\t\t#{c_migrate.reject { |x| x.blank? }.join(', ')}"
             end
           end
           migrate << "\n\t\t\tt.timestamps"
@@ -59,5 +61,19 @@ class Migrate
 
   def nm_arquivo(arquivo, nr_second)
     "#{(Time.now + nr_second.second).strftime("%Y%m%d%H%M%S")}_create_#{arquivo.gsub(/::/, '').pluralize.underscore}.rb"
+  end
+
+  def verifica_relacionamento(class_name, column_name)
+    relation = ''
+    eval("#{class_name}.reflect_on_all_associations").each do |association|
+      next unless association.options[:foreign_key].to_s.eql?(column_name)
+      next unless association.macro.to_s.eql?('belongs_to')
+      classe = association.options[:class_name].try(:constantize)
+      if classe
+        relation += "foreign_key: { to_table: '#{classe.table_name.to_s.downcase}' }, "
+        relation += "comment: 'Relaciona com a tabela #{classe.table_name.to_s.downcase}'"
+      end
+    end
+    relation
   end
 end
