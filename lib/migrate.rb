@@ -30,11 +30,10 @@ class Migrate
             unless ['id', 'created_at', 'updated_at'].include? coluna.name
               c_migrate << "t.#{coluna.type.to_s} :#{coluna.name}"
               c_migrate << "null: #{coluna.null}" unless coluna.null
-              c_migrate << "limit: #{coluna.limit}" if coluna.limit.present? && !%w(decimal integer).include?(coluna.type.to_s)
-              c_migrate << "precision: #{coluna.precision}" if coluna.precision.present?
-              c_migrate << "scale: #{coluna.scale}" if coluna.scale.present?
-              c_migrate << verifica_relacionamento(nm_classe, coluna.name)
-
+              c_migrate << "limit: #{coluna.limit}" if coluna.limit.present? && !%w(decimal integer boolean timestamp).include?(coluna.type.to_s)
+              c_migrate << "precision: #{coluna.precision}" if coluna.precision.present? && !%w(boolean).include?(coluna.type.to_s)
+              c_migrate << "scale: #{coluna.scale}" if coluna.scale.present? && !%w(boolean).include?(coluna.type.to_s)
+              c_migrate << "default: #{coluna.default}" if coluna.default.present?
               #c_migrate << "comment: '#{coluna.comment}'" if coluna.comment.present?
               migrate << "\t\t\t#{c_migrate.reject { |x| x.blank? }.join(', ')}"
             end
