@@ -1,6 +1,5 @@
 class Migrate
 
-
   def initialize(nm_modelo)
     @nm_modelo = nm_modelo
     if nm_modelo.present?
@@ -9,7 +8,6 @@ class Migrate
       "Modelo não encontrado !!"
     end
   end
-
 
   def gerar
     path = File.join(Rails.root, 'app', 'models', @nm_modelo)
@@ -31,15 +29,16 @@ class Migrate
             c_migrate = []
             unless ['id', 'created_at', 'updated_at'].include? coluna.name
               c_migrate << "t.#{coluna.type.to_s} :#{coluna.name}"
-              c_migrate << "null: #{coluna.null}"
-              c_migrate << "limit: #{coluna.limit}" if coluna.limit.present?
-              c_migrate << "precision: #{coluna.precision}" if coluna.precision.present?
-              c_migrate << "scale: #{coluna.scale}" if coluna.scale.present?
+              c_migrate << "null: #{coluna.null}" unless coluna.null
+              c_migrate << "limit: #{coluna.limit}" if coluna.limit.present? && !%w(decimal integer boolean timestamp).include?(coluna.type.to_s)
+              c_migrate << "precision: #{coluna.precision}" if coluna.precision.present? && !%w(boolean).include?(coluna.type.to_s)
+              c_migrate << "scale: #{coluna.scale}" if coluna.scale.present? && !%w(boolean).include?(coluna.type.to_s)
+              c_migrate << "default: #{coluna.default}" if coluna.default.present?
               #c_migrate << "comment: '#{coluna.comment}'" if coluna.comment.present?
-              migrate << "\t\t\t#{c_migrate * ', '}"
+              migrate << "\t\t\t#{c_migrate.reject { |x| x.blank? }.join(', ')}"
             end
           end
-          migrate << "\t\t\tt.timestamps null: false"
+          migrate << "\n\t\t\tt.timestamps"
           migrate << "\t\tend"
           migrate << "\tend"
           migrate << "end"
@@ -52,21 +51,28 @@ class Migrate
           file_out.close
         end
       rescue Exception => e
+        puts "Houve um erro: #{e}"
       end
     end
-    # path_out = File.join(path_saida, 'modelo_saida.txt')
-    # file_out = File.new(path_out, 'w')
-    # conteudos.map do |conteudo|
-    #   file_out.puts conteudo
-    # end
-    # file_out.close
-    #puts "#{path_out} => Gerado com Sucesso"
-  end
 
+    puts 'Gerado com Sucesso'
+  end
 
   def nm_arquivo(arquivo, nr_second)
     "#{(Time.now + nr_second.second).strftime("%Y%m%d%H%M%S")}_create_#{arquivo.gsub(/::/, '').pluralize.underscore}.rb"
   end
 
-
+  def verifica_relacionamento(class_name, column_name)
+    relation = ''
+    eval("#{class_name}.reflect_on_all_associations").each do |association|
+      next unless association.options[:foreign_key].to_s.eql?(column_name)
+      next unless association.macro.to_s.eql?('belongs_to')
+      classe = association.options[:class_name].try(:constantize)
+      if classe
+        relation += "foreign_key: { to_table: '#{classe.table_name.to_s.downcase}' }, "
+        relation += "comment: 'Relaciona com a tabela #{classe.table_name.to_s.downcase}'"
+      end
+    end
+    relation
+  end
 end
