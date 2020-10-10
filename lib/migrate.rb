@@ -1,30 +1,47 @@
 class Migrate
 
-  def initialize(nm_modelo)
-    @nm_modelo = nm_modelo
-    if nm_modelo.present?
+  def initialize(nm_schema, projects = Rails.root)
+    @nm_schema = nm_schema
+    @projects = projects
+    if @nm_schema.present?
       gerar
     else
       "Modelo não encontrado !!"
     end
   end
 
+  def locate_class(path_arquivo)
+    arq_class = File.open(path_arquivo, 'r').readlines
+    locate_file = ''
+    arq_class.each do |arquivo|
+      if arquivo.split(' ')[0] == 'class'
+        locate_file =arquivo
+        break
+      else
+        locate_file =  nil
+      end
+    end
+    locate_file
+  end
+
   def gerar
-    path = File.join(Rails.root, 'app', 'models', @nm_modelo)
+    path = File.join(@projects, 'app', 'models', @nm_schema)
     files = Dir.glob("#{path}/*")
     path_saida = File.join(Rails.root, 'db', 'reverse_migrate')
     Dir.mkdir(path_saida, 0700) unless Dir.exist?(path_saida)
     nr_second = 0
     files.map do |file|
       begin
-        arq_class = File.open(file, 'r') { |f| f.readlines }[0].split(' ')
-        if arq_class[0] == 'class'
+        arq_class = locate_class(file)
+        if arq_class.present?
+          arq_class = arq_class.split(' ')
           nm_classe = arq_class[1]
           colunas = eval("#{nm_classe}.columns")
           migrate = []
           migrate << "class Create#{nm_classe.gsub(/::/, '').pluralize} < ActiveRecord::Migration"
           migrate << "\tdef change"
-          migrate << "\t\tcreate_table '#{eval("#{nm_classe}.table_name.downcase")}' do |t|"
+          migrate << "\t\t unless table_exists?(#{nm_classe}.table_name)"
+          migrate << "\t\t\tcreate_table #{nm_classe}.table_name do |t|"
           colunas.map do |coluna|
             c_migrate = []
             unless ['id', 'created_at', 'updated_at'].include? coluna.name
@@ -34,19 +51,19 @@ class Migrate
               c_migrate << "precision: #{coluna.precision}" if coluna.precision.present? && !%w(boolean).include?(coluna.type.to_s)
               c_migrate << "scale: #{coluna.scale}" if coluna.scale.present? && !%w(boolean).include?(coluna.type.to_s)
               c_migrate << "default: #{coluna.default}" if coluna.default.present?
-              #c_migrate << "comment: '#{coluna.comment}'" if coluna.comment.present?
-              migrate << "\t\t\t#{c_migrate.reject { |x| x.blank? }.join(', ')}"
+              c_migrate << "comment: '#{coluna.comment}'" if coluna.comment.present?
+              migrate << "\t\t\t\t#{c_migrate.reject {|x| x.blank?}.join(', ')}"
             end
           end
-          migrate << "\n\t\t\tt.timestamps"
+          migrate << "\n\t\t\t\tt.timestamps"
+          migrate << "\t\t\tend"
           migrate << "\t\tend"
           migrate << "\tend"
           migrate << "end"
-
           file_out = File.new("#{path_saida}/#{nm_arquivo(nm_classe, nr_second)}", 'w')
           nr_second += 1
           migrate.map do |m|
-            file_out.puts m
+            file_out.puts "#{m}"
           end
           file_out.close
         end
